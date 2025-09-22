@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Travel Planner — Chat UI</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: #0f172a;
+        --text: #e5e7eb;
+        --muted: #9aa4b2;
+        --accent: #22c55e;
+        --border: #1e293b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(180deg, #0b1220, #0b1220 40%, #0e1628);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, Segoe UI, Roboto, Arial;
+      }
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+      }
+      .header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        background: #0c1426;
+      }
+      .header h1 {
+        font-size: 16px;
+        margin: 0;
+        color: #cbd5e1;
+      }
+      .chat {
+        flex: 1;
+        overflow: auto;
+        padding: 20px;
+      }
+      .msg {
+        display: flex;
+        margin: 10px 0;
+        gap: 10px;
+      }
+      .msg.user {
+        justify-content: flex-end;
+      }
+      .bubble {
+        max-width: 75%;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        line-height: 1.4;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .msg.user .bubble {
+        background: #1a2b45;
+        border-color: #22314e;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .kv {
+        display: inline-flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        border: 1px dashed var(--border);
+        padding: 8px;
+        border-radius: 10px;
+        margin-top: 8px;
+      }
+      .kv span {
+        background: #0e1a33;
+        border: 1px solid #1c2a49;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .day {
+        margin: 10px 0;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .day summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 10px 12px;
+        background: #0d162a;
+        border-bottom: 1px solid var(--border);
+      }
+      .day summary::-webkit-details-marker {
+        display: none;
+      }
+      .day table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .day th,
+      .day td {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 14px;
+      }
+      .footer {
+        position: sticky;
+        bottom: 0;
+        background: linear-gradient(180deg, transparent, #0b1220 30% 100%);
+        padding: 14px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+      .input {
+        flex: 1;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 10px;
+      }
+      textarea {
+        width: 100%;
+        resize: none;
+        min-height: 56px;
+        max-height: 160px;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+      }
+      button.primary {
+        background: var(--accent);
+        border: none;
+        color: #05220e;
+        font-weight: 700;
+        cursor: pointer;
+        padding: 0 16px;
+        border-radius: 10px;
+        height: 40px;
+      }
+      .err {
+        color: #fecaca;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Travel Planner Chat</h1>
+      </div>
+
+      <div id="chat" class="chat"></div>
+
+      <div class="footer">
+        <div class="row">
+          <div class="input">
+            <textarea
+              id="prompt"
+              placeholder="Hãy nhập yêu cầu chuyến đi của bạn..."
+            ></textarea>
+          </div>
+          <button id="send" class="primary">Gửi</button>
+        </div>
+        <small>Enter để gửi, Shift+Enter để xuống dòng.</small>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE = "http://127.0.0.1:8000"; // cố định cho khách
+
+      const el = (q) => document.querySelector(q);
+      const chat = el("#chat");
+      const toVND = (x) => (x || 0).toLocaleString("vi-VN") + "₫";
+
+      function addMsg(role, html) {
+        const wrap = document.createElement("div");
+        wrap.className = "msg " + role;
+        const bubble = document.createElement("div");
+        bubble.className = "bubble";
+        bubble.innerHTML = html;
+        wrap.appendChild(bubble);
+        chat.appendChild(wrap);
+        chat.scrollTop = chat.scrollHeight;
+        return bubble;
+      }
+
+      function itineraryToHTML(data) {
+        if (!data || !Array.isArray(data.itinerary)) {
+          return `<div class="err">Kết quả không hợp lệ.</div>`;
+        }
+        let head = `
+    <div class="kv">
+      <span>Tổng chi phí: <b>${toVND(data.total_cost_estimate)}</b></span>
+      <span>~ ${toVND(data.per_day_budget)}/ngày</span>
+      <span>Số ngày: ${data.days}</span>
+    </div>
+  `;
+        let daysHTML = data.itinerary
+          .map(
+            (d) => `
+    <details class="day" ${data.itinerary.length <= 3 ? "open" : ""}>
+      <summary>Ngày ${d.day} — Tổng: <b>${toVND(d.day_cost_estimate)}</b> ${
+              d.over_budget ? '<span class="err">(vượt ngân sách)</span>' : ""
+            }</summary>
+      <table>
+        <tr><th>Buổi</th><th>Địa điểm</th><th>Chi phí</th><th>Giờ mở</th><th>Đánh giá</th></tr>
+        ${row("Sáng", d.morning)}
+        ${row("Trưa", d.lunch)}
+        ${row("Chiều", d.afternoon)}
+        ${row("Khách sạn", d.hotel)}
+      </table>
+    </details>
+  `
+          )
+          .join("");
+        return head + daysHTML;
+      }
+      function row(label, p) {
+        if (!p)
+          return `<tr><td>${label}</td><td colspan="4"><span class="err">Không có gợi ý phù hợp</span></td></tr>`;
+        return `<tr>
+    <td>${label}</td>
+    <td><b>${p.name}</b><div class="meta">${p.city} · ${p.category}</div></td>
+    <td>${toVND(p.avg_cost)}</td>
+    <td>${p.open_time || "-"}–${p.close_time || "-"}</td>
+    <td>${(p.rating || 0).toFixed(2)}</td>
+  </tr>`;
+      }
+
+      async function send() {
+        const prompt = el("#prompt").value.trim();
+        if (!prompt) return;
+        addMsg("user", prompt);
+        el("#prompt").value = "";
+
+        const thinking = addMsg("assistant", "⏳ Đang lập lịch trình…");
+
+        try {
+          // mặc định: 2 ngày, 3 triệu, không city
+          const p = new URLSearchParams({
+            q: prompt,
+            days: "1",
+            budget_total: "2000000",
+          });
+          const r = await fetch(`${API_BASE}/itinerary?${p.toString()}`);
+          const data = await r.json();
+          if (!r.ok) {
+            thinking.innerHTML = `<div class="err">API lỗi ${r.status}: ${
+              data?.detail || "Unknown"
+            }</div>`;
+            return;
+          }
+          thinking.innerHTML = itineraryToHTML(data);
+        } catch (e) {
+          console.error(e);
+          thinking.innerHTML = `<div class="err">Không gọi được API. Kiểm tra lại server.</div>`;
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        el("#send").addEventListener("click", send);
+        el("#prompt").addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" && !ev.shiftKey) {
+            ev.preventDefault();
+            send();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
