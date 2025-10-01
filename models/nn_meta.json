@@ -1,6 +1,0 @@
-{
-  "model": "intfloat/multilingual-e5-base",
-  "rows": 176,
-  "dim": 768,
-  "text_col": "text"
-}

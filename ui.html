@@ -2,8 +2,8 @@
 <html lang="vi">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Travel Planner — Chat UI</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ViVu — Travel Planner</title>
     <style>
       :root {
         --bg: #0b1220;
@@ -12,6 +12,7 @@
         --muted: #9aa4b2;
         --accent: #22c55e;
         --border: #1e293b;
+        --danger: #fecaca;
       }
       * {
         box-sizing: border-box;
@@ -39,10 +40,11 @@
         margin: 0;
         color: #cbd5e1;
       }
+
       .chat {
         flex: 1;
         overflow: auto;
-        padding: 20px;
+        padding: 16px;
       }
       .msg {
         display: flex;
@@ -57,8 +59,8 @@
         padding: 12px 14px;
         border: 1px solid var(--border);
         border-radius: 16px;
-        line-height: 1.4;
         background: rgba(255, 255, 255, 0.03);
+        line-height: 1.45;
       }
       .msg.user .bubble {
         background: #1a2b45;
@@ -69,59 +71,17 @@
         font-size: 12px;
         margin-top: 6px;
       }
-      .kv {
-        display: inline-flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        border: 1px dashed var(--border);
-        padding: 8px;
-        border-radius: 10px;
-        margin-top: 8px;
-      }
-      .kv span {
-        background: #0e1a33;
-        border: 1px solid #1c2a49;
-        border-radius: 999px;
-        padding: 4px 8px;
-        font-size: 12px;
-      }
-      .day {
-        margin: 10px 0;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        overflow: hidden;
-      }
-      .day summary {
-        cursor: pointer;
-        list-style: none;
-        padding: 10px 12px;
-        background: #0d162a;
-        border-bottom: 1px solid var(--border);
-      }
-      .day summary::-webkit-details-marker {
-        display: none;
-      }
-      .day table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .day th,
-      .day td {
-        border-bottom: 1px solid var(--border);
-        padding: 8px 10px;
-        text-align: left;
-        font-size: 14px;
-      }
+
       .footer {
         position: sticky;
         bottom: 0;
         background: linear-gradient(180deg, transparent, #0b1220 30% 100%);
-        padding: 14px;
+        padding: 12px 14px;
       }
       .row {
         display: flex;
         gap: 10px;
-        align-items: flex-end;
+        align-items: stretch;
       }
       .input {
         flex: 1;
@@ -149,18 +109,80 @@
         cursor: pointer;
         padding: 0 16px;
         border-radius: 10px;
-        height: 40px;
+        height: 56px;
       }
       .err {
-        color: #fecaca;
+        color: var(--danger);
+      }
+
+      .day {
+        margin: 10px 0;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .day summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 10px 12px;
+        background: #0d162a;
+        border-bottom: 1px solid var(--border);
+      }
+      .day summary::-webkit-details-marker {
+        display: none;
+      }
+      .day table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .day th,
+      .day td {
+        border-bottom: 1px solid var(--border);
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 14px;
+        vertical-align: top;
+      }
+
+      .kv {
+        display: inline-flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        border: 1px dashed var(--border);
+        padding: 8px;
+        border-radius: 10px;
+        margin: 8px 0;
+      }
+      .kv span {
+        background: #0e1a33;
+        border: 1px solid #1c2a49;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 8px 0 0;
+      }
+      .chip {
+        background: #0e1a33;
+        color: #cbd5e1;
+        border: 1px solid #1c2a49;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .chip:hover {
+        filter: brightness(1.1);
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="header">
-        <h1>Travel Planner Chat</h1>
-      </div>
+      <div class="header"><h1>ViVu — Travel Planner</h1></div>
 
       <div id="chat" class="chat"></div>
 
@@ -169,8 +191,24 @@
           <div class="input">
             <textarea
               id="prompt"
-              placeholder="Hãy nhập yêu cầu chuyến đi của bạn..."
+              placeholder="Bạn muốn gì? (vd: 'đi chơi Đà Nẵng 2 ngày, quỹ tầm 5tr', hoặc 'Asia Park mở cửa mấy giờ?')"
             ></textarea>
+            <div class="chips">
+              <span class="chip" data-q="đi chơi Đà Nẵng 2 ngày quỹ 6tr"
+                >đi chơi 2 ngày 6tr</span
+              >
+              <span
+                class="chip"
+                data-q="ngắm biển, ngân sách 3tr/ngày ở Đà Nẵng"
+                >ngắm biển</span
+              >
+              <span class="chip" data-q="ăn hải sản Đà Nẵng 1 ngày 3tr"
+                >ăn hải sản</span
+              >
+              <span class="chip" data-q="Asia Park mở cửa mấy giờ?"
+                >Asia Park?</span
+              >
+            </div>
           </div>
           <button id="send" class="primary">Gửi</button>
         </div>
@@ -179,11 +217,16 @@
     </div>
 
     <script>
-      const API_BASE = "http://127.0.0.1:8000"; // cố định cho khách
-
+      const API_BASE = "http://127.0.0.1:8000";
+      const chat = document.querySelector("#chat");
       const el = (q) => document.querySelector(q);
-      const chat = el("#chat");
-      const toVND = (x) => (x || 0).toLocaleString("vi-VN") + "₫";
+
+      const toVND = (x) => Number(x || 0).toLocaleString("vi-VN") + "₫";
+      const esc = (s) =>
+        String(s || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
 
       function addMsg(role, html) {
         const wrap = document.createElement("div");
@@ -197,87 +240,224 @@
         return bubble;
       }
 
-      function itineraryToHTML(data) {
-        if (!data || !Array.isArray(data.itinerary)) {
-          return `<div class="err">Kết quả không hợp lệ.</div>`;
+      // --- Lightweight NLU: bóc days/budget/city từ câu người dùng ---
+      function parseUser(prompt) {
+        const raw = prompt.trim();
+        const norm = raw.toLowerCase();
+
+        // city (rất đơn giản; có thể thêm)
+        let city = null;
+        const cityMap = [
+          ["đà nẵng", "Da Nang"],
+          ["da nang", "Da Nang"],
+          ["danang", "Da Nang"],
+          ["hội an", "Hoi An"],
+          ["hoi an", "Hoi An"],
+          ["huế", "Hue"],
+          ["hue", "Hue"],
+        ];
+        for (const [k, v] of cityMap)
+          if (norm.includes(k)) {
+            city = v;
+            break;
+          }
+
+        // days
+        let days = null;
+        const mDay = norm.match(/(\d+)\s*(ngày|ngay|day|days|đn)/);
+        if (mDay) days = Math.max(1, parseInt(mDay[1], 10));
+
+        // budget:  "5tr", "5 triệu", "1.5m", "500k", "3.2 triệu/ ngày", "quỹ 6tr", "ngân sách 5tr"
+        let budget_total = null;
+        const mB = norm.match(
+          /([\d.,]+)\s*(triệu|tr|m|million|trieu|k|ng[aă]n|ngh[iì]n|vnd|vnđ|đ)/
+        );
+        if (mB) {
+          const num = parseFloat(mB[1].replace(/\./g, "").replace(",", "."));
+          const unit = mB[2];
+          if (/^k|ng[aă]n|ngh/i.test(unit))
+            budget_total = Math.round(num * 1e3);
+          else if (/tr|triệu|trieu|m|million/i.test(unit))
+            budget_total = Math.round(num * 1e6);
+          else budget_total = Math.round(num); // vnd
         }
-        let head = `
-    <div class="kv">
-      <span>Tổng chi phí: <b>${toVND(data.total_cost_estimate)}</b></span>
-      <span>~ ${toVND(data.per_day_budget)}/ngày</span>
-      <span>Số ngày: ${data.days}</span>
-    </div>
-  `;
-        let daysHTML = data.itinerary
-          .map(
-            (d) => `
-    <details class="day" ${data.itinerary.length <= 3 ? "open" : ""}>
-      <summary>Ngày ${d.day} — Tổng: <b>${toVND(d.day_cost_estimate)}</b> ${
-              d.over_budget ? '<span class="err">(vượt ngân sách)</span>' : ""
-            }</summary>
-      <table>
-        <tr><th>Buổi</th><th>Địa điểm</th><th>Chi phí</th><th>Giờ mở</th><th>Đánh giá</th></tr>
-        ${row("Sáng", d.morning)}
-        ${row("Trưa", d.lunch)}
-        ${row("Chiều", d.afternoon)}
-        ${row("Khách sạn", d.hotel)}
-      </table>
-    </details>
-  `
-          )
-          .join("");
-        return head + daysHTML;
+        // /ngày => chuyển sang tổng nếu có days
+        if (budget_total && /\/\s*(ng[aà]y|day)/.test(norm) && days) {
+          budget_total = budget_total * days;
+        }
+
+        // loại bỏ cụm đã nhận diện khỏi câu để giữ query “ý định”
+        let q = raw;
+        q = q.replace(mDay?.[0] || "", "").replace(mB?.[0] || "", "");
+
+        // defaults: 3tr/ngày
+        let usedDefault = { days: false, budget: false };
+        if (!days) {
+          days = 1;
+          usedDefault.days = true;
+        }
+        if (!budget_total) {
+          budget_total = days * 3_000_000;
+          usedDefault.budget = true;
+        }
+
+        return { q: q.trim(), days, budget_total, city, usedDefault };
       }
+
       function row(label, p) {
         if (!p)
           return `<tr><td>${label}</td><td colspan="4"><span class="err">Không có gợi ý phù hợp</span></td></tr>`;
         return `<tr>
-    <td>${label}</td>
-    <td><b>${p.name}</b><div class="meta">${p.city} · ${p.category}</div></td>
-    <td>${toVND(p.avg_cost)}</td>
-    <td>${p.open_time || "-"}–${p.close_time || "-"}</td>
-    <td>${(p.rating || 0).toFixed(2)}</td>
-  </tr>`;
+          <td>${label}</td>
+          <td><b>${esc(p.name || "")}</b><div class="meta">${esc(
+          p.city || ""
+        )} · ${esc(p.category || "")}</div></td>
+          <td>${toVND(p.avg_cost)}</td>
+          <td>${p.open_time || "-"}–${p.close_time || "-"}</td>
+          <td>${Number(p.rating || 0).toFixed(2)}</td>
+        </tr>`;
       }
 
-      async function send() {
-        const prompt = el("#prompt").value.trim();
-        if (!prompt) return;
-        addMsg("user", prompt);
-        el("#prompt").value = "";
+      function itineraryToHTML(data) {
+        if (!data || !Array.isArray(data.itinerary))
+          return `<div class="err">Kết quả không hợp lệ.</div>`;
+        const head = `
+          <div class="kv">
+            <span>Tổng chi phí: <b>${toVND(data.total_cost_estimate)}</b></span>
+            <span>~ ${toVND(data.per_day_budget)}/ngày</span>
+            <span>Số ngày: ${data.days}</span>
+          </div>`;
+        const daysHTML = data.itinerary
+          .map(
+            (d) => `
+          <details class="day" ${data.itinerary.length <= 3 ? "open" : ""}>
+            <summary>Ngày ${d.day} — Tổng: <b>${toVND(
+              d.day_cost_estimate
+            )}</b> ${
+              d.over_budget ? '<span class="err">(vượt ngân sách)</span>' : ""
+            }</summary>
+            <table>
+              <tr><th>Buổi</th><th>Địa điểm</th><th>Chi phí</th><th>Giờ mở</th><th>Đánh giá</th></tr>
+              ${row("Sáng", d.morning)}
+              ${row("Trưa", d.lunch)}
+              ${row("Chiều", d.afternoon)}
+              ${row("Tối (sự kiện)", d.evening)}
+              ${row("Khách sạn", d.hotel)}
+            </table>
+          </details>`
+          )
+          .join("");
+        return head + daysHTML;
+      }
 
-        const thinking = addMsg("assistant", "⏳ Đang lập lịch trình…");
+      async function callItinerary(params) {
+        const p = new URLSearchParams({
+          q: params.q || "",
+          days: String(params.days),
+          budget_total: String(params.budget_total),
+        });
+        if (params.city) p.set("city", params.city);
+        const r = await fetch(`${API_BASE}/itinerary?${p.toString()}`);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok)
+          throw new Error(
+            data?.detail
+              ? typeof data.detail === "string"
+                ? data.detail
+                : JSON.stringify(data.detail)
+              : `HTTP ${r.status}`
+          );
+        return data;
+      }
+      async function callAsk(q) {
+        const p = new URLSearchParams({ q });
+        const r = await fetch(`${API_BASE}/ask?${p.toString()}`);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+        return data;
+      }
 
-        try {
-          // mặc định: 2 ngày, 3 triệu, không city
-          const p = new URLSearchParams({
-            q: prompt,
-            days: "1",
-            budget_total: "2000000",
-          });
-          const r = await fetch(`${API_BASE}/itinerary?${p.toString()}`);
-          const data = await r.json();
-          if (!r.ok) {
-            thinking.innerHTML = `<div class="err">API lỗi ${r.status}: ${
-              data?.detail || "Unknown"
-            }</div>`;
-            return;
+      function looksLikeQnA(text) {
+        const t = text.toLowerCase();
+        if (t.length <= 10) return true; // tên địa danh ngắn
+        return /(mấy giờ|giờ mở|giờ đóng|là gì|ở đâu|bao nhiêu|giá|history|lịch sử)/i.test(
+          t
+        );
+      }
+
+      function showDefaultsNote(usedDefault, days, budget_total) {
+        if (!usedDefault.days && !usedDefault.budget) return;
+        addMsg(
+          "assistant",
+          `Mình đang dùng <b>mặc định ~ ${toVND(
+            3_000_000
+          )}/ngày</b>. Kế hoạch hiện là <b>${days} ngày ~ ${toVND(
+            budget_total
+          )}</b>.<br>` +
+            `<i>Nếu muốn chính xác hơn, hãy cho tôi biết tổng quỹ và số ngày bạn đi.</i>`
+        );
+      }
+
+      async function send(promptOverride) {
+        const promptEl = el("#prompt");
+        const raw = (promptOverride ?? promptEl?.value ?? "").toString().trim();
+
+        if (!raw) return;
+
+        addMsg("user", esc(raw));
+        promptEl.value = "";
+
+        // route Q&A vs itinerary
+        if (looksLikeQnA(raw)) {
+          const thinking = addMsg("assistant", "⏳ Đang tìm thông tin…");
+          try {
+            const data = await callAsk(raw);
+            thinking.innerHTML =
+              data?.html ||
+              esc(data?.text || "Không tìm thấy thông tin phù hợp.");
+          } catch (e) {
+            thinking.innerHTML = `<span class="err">API lỗi: ${esc(
+              e.message || e
+            )}</span>`;
           }
+          return;
+        }
+
+        // parse & call itinerary
+        const parsed = parseUser(raw);
+        const thinking = addMsg("assistant", "⏳ Đang lập lịch trình…");
+        try {
+          const data = await callItinerary(parsed);
           thinking.innerHTML = itineraryToHTML(data);
+          showDefaultsNote(
+            parsed.usedDefault,
+            parsed.days,
+            parsed.budget_total
+          );
         } catch (e) {
-          console.error(e);
-          thinking.innerHTML = `<div class="err">Không gọi được API. Kiểm tra lại server.</div>`;
+          thinking.innerHTML = `<span class="err">API lỗi: ${esc(
+            e.message || e
+          )}</span>`;
         }
       }
 
       document.addEventListener("DOMContentLoaded", () => {
-        el("#send").addEventListener("click", send);
+        addMsg(
+          "assistant",
+          "<b>Tôi là ViVu AI</b> — Hãy gõ mong muốn chuyến đi của bạn. Ví dụ: <i>đi chơi Đà Nẵng 2 ngày quỹ 6tr</i>."
+        );
+        el("#send").addEventListener("click", () => send());
         el("#prompt").addEventListener("keydown", (ev) => {
           if (ev.key === "Enter" && !ev.shiftKey) {
             ev.preventDefault();
             send();
           }
         });
+        document
+          .querySelectorAll(".chip")
+          .forEach((c) =>
+            c.addEventListener("click", () => send(c.getAttribute("data-q")))
+          );
       });
     </script>
   </body>

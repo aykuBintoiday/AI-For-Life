@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "finished_at": "2025-09-29T11:09:56.117045+00:00",
+  "details": {
+    "api_base": "http://127.0.0.1:8000",
+    "used_token": false
+  }
+}

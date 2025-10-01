@@ -1,153 +1,178 @@
 # src/etl.py
-import re, unicodedata
+from __future__ import annotations
+
+import sys
+import math
+from pathlib import Path
+from typing import Iterable
+
+import numpy as np
 import pandas as pd
 
-SPACE_RE = re.compile(r"\s+")
-URL_RE = re.compile(r"https?://\S+|www\.\S+")
-DAY_MAP = {"Mon":0,"Tue":1,"Wed":2,"Thu":3,"Fri":4,"Sat":5,"Sun":6}
+# if your project already has these helpers, import; otherwise keep the fallbacks
+try:
+    from .textnorm import strip_accents
+except Exception:
+    import unicodedata
+    def strip_accents(s: str) -> str:
+        s = str(s or "")
+        s = unicodedata.normalize("NFD", s)
+        s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+        return s
 
-def strip_accents(s: str) -> str:
-    s = unicodedata.normalize("NFD", s or "")
-    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
-    return unicodedata.normalize("NFC", s)
-
-def clean_text(s: str) -> str:
-    s = str(s or "").strip()
-    s = URL_RE.sub(" ", s)
-    s = SPACE_RE.sub(" ", s)
-    return s
-
-def hhmm_to_min(x) -> int | None:
-    if not isinstance(x, str):
-        return None
-    x = x.strip()
-    if not x:
-        return None
-    try:
-        h, m = x.split(":")
-        return int(h) * 60 + int(m)
-    except:
-        return None
-
-def price_to_level(x) -> int:
-    if not isinstance(x, str):
-        return 0
-    x = x.strip()
-    return 1 if x == "$" else 2 if x == "$$" else 3 if x == "$$$" else 0
-
-def parse_closed_days(x) -> set[int]:
-    if not isinstance(x, str):
+def parse_closed_days(v) -> set[int]:
+    """
+    Accepts: '0,6' or 'Sun;Sat' or [0,6] or '' -> set()
+    0=Mon ... 6=Sun (keep consistent with your codebase).
+    """
+    if isinstance(v, set):
+        return v
+    if isinstance(v, (list, tuple)):
+        out = set()
+        for x in v:
+            try:
+                out.add(int(x))
+            except Exception:
+                pass
+        return out
+    if not isinstance(v, str):
         return set()
-    x = x.strip()
-    if not x:
+    s = v.strip()
+    if not s:
         return set()
-    parts = [p.strip() for p in re.split(r"[,\s;/]+", x) if p.strip()]
+    names = {
+        "mon": 0, "monday": 0, "0": 0,
+        "tue": 1, "tuesday": 1, "1": 1,
+        "wed": 2, "wednesday": 2, "2": 2,
+        "thu": 3, "thursday": 3, "3": 3,
+        "fri": 4, "friday": 4, "4": 4,
+        "sat": 5, "saturday": 5, "5": 5,
+        "sun": 6, "sunday": 6, "6": 6,
+    }
     out = set()
-    for p in parts:
-        if p in DAY_MAP:
-            out.add(DAY_MAP[p])
+    for tok in s.replace(";", ",").split(","):
+        k = strip_accents(tok).lower().strip()
+        if k in names:
+            out.add(names[k])
+        else:
+            try:
+                out.add(int(k))
+            except Exception:
+                pass
     return out
 
-# ===== Synonyms để tăng phủ từ khoá phổ biến =====
-SYNONYMS = {
-    "biển": ["bien","beach","sea","bai bien","ocean","sea view","view bien"],
-    "chụp ảnh": ["chup anh","chup hinh","photo","photography","checkin","check-in"],
-    "văn hoá": ["van hoa","culture","cultural"],
-    "bảo tàng": ["bao tang","museum"],
-    "chợ": ["cho","market","night market","cho dem"],
-    "cà phê": ["ca phe","coffee","cafe"],
-    "hải sản": ["hai san","seafood"],
-    "khách sạn": ["khach san","hotel"],
-    "nghỉ dưỡng": ["nghi duong","resort","spa"],
-    "cầu": ["cau","bridge"],
-    "đi thuyền": ["di thuyen","boat","basket boat","river cruise"],
-    "ngắm cảnh": ["ngam canh","viewpoint","rooftop","sunset","sunrise","night view"],
-    "đặc sản": ["dac san","local food","street food"],
+def parse_hhmm(s: str) -> float:
+    """
+    '15:00' -> 900; '23:59' -> 1439; '', '-', 'N/A' -> np.nan
+    """
+    if s is None:
+        return np.nan
+    t = str(s).strip()
+    if not t or t in {"-", "—", "–", "na", "n/a", "null"}:
+        return np.nan
+    try:
+        parts = t.replace(".", ":").split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        v = 60 * h + m
+        if v < 0 or v >= 24 * 60:
+            return np.nan
+        return float(v)
+    except Exception:
+        return np.nan
 
-    # ==== BỔ SUNG cho 'đi chơi' ====
-    "giải trí": ["giai tri","amusement","park","theme park","rides","roller coaster","cong vien","khu vui choi"],
-    "vui chơi": ["vui choi","amusement","park","theme park","rides","cong vien","khu vui choi"],
-    "đi dạo": ["di dao","walking","promenade","park","riverfront"],
-    "đi chơi": ["giai tri","vui choi","cong vien","amusement","park","night market","cho dem","bar","nightlife"],
+def _safe_float(x, default=0.0):
+    try:
+        if x in ("", None, "—", "–", "-"):
+            return float(default)
+        return float(x)
+    except Exception:
+        return float(default)
 
-    # ===== ĐỊA DANH ĐÀ NẴNG =====
-    "ba na": ["ba na hills","bana","bà nà","banahills","sun world ba na","sunworld bana"],
-    "bà nà": ["ba na hills","bana","ba na","banahills","sun world ba na","sunworld bana"],
-    "sun world": ["sun world ba na","sunworld bana","ba na hills","danang wonders","asia park"],
-    "cau rong": ["cầu rồng","dragon bridge","cau rong da nang","dragonbridge"],
-    "cầu rồng": ["cau rong","dragon bridge","cau rong da nang","dragonbridge"],
-    "son tra": ["bán đảo sơn trà","son tra peninsula","linh ung","chua linh ung","bai but"],
-    "sơn trà": ["ban dao son tra","son tra peninsula","linh ung","chua linh ung","bai but"],
-    "my khe": ["bãi biển mỹ khê","my khe beach"],
-    "núi thần tài": ["suoi nuoc nong","than tai mountain hot spring","nuoc nong","hot spring park"],
-    "hoi an": ["hội an","ancient town","pho co hoi an"],
-}
+def _safe_int(x, default=0):
+    try:
+        if x in ("", None, "—", "–", "-"):
+            return int(default)
+        return int(float(x))
+    except Exception:
+        return int(default)
 
-def expand_with_synonyms(text_lower_nodiac: str) -> str:
-    extra = []
-    for k, vs in SYNONYMS.items():
-        k_norm = strip_accents(k).lower()
-        if k_norm in text_lower_nodiac:
-            extra.extend(vs)
-    return " ".join(sorted(set(extra)))
+SCHEMA = [
+    "id", "name", "city", "category",
+    "avg_cost", "duration_min", "price_level",
+    "open_time", "close_time", "closed_days",
+    "rating", "review_count", "best_time",
+    "desc", "tags", "image_url", "lat", "lon", "address",
+]
 
-def load_dataset(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
+def _ensure_cols(df: pd.DataFrame) -> pd.DataFrame:
+    for c in SCHEMA:
+        if c not in df.columns:
+            df[c] = np.nan
+    return df[SCHEMA].copy()
 
-    # Chuẩn hoá cột string
-    df["name"] = df["name"].astype(str)
-    df["city"] = df["city"].astype(str)
-    df["category"] = df["category"].astype(str).str.lower()
-    df["desc"] = df["desc"].apply(clean_text)
-    df["tags"] = df["tags"].fillna("").astype(str)
-    df["best_time"] = df["best_time"].fillna("").astype(str)
-    df["address"] = df["address"].fillna("").astype(str)
+def load_dataset(csv_path: str | Path) -> pd.DataFrame:
+    p = Path(csv_path)
+    if not p.exists():
+        # fallback: use the last clean parquet if available, else empty frame
+        pq = p.parent.parent / "data" / "itinerary_dataset.clean.parquet"
+        if pq.exists():
+            return pd.read_parquet(pq)
+        return pd.DataFrame(columns=SCHEMA)
+    df = pd.read_csv(p, encoding="utf-8-sig", on_bad_lines="skip")
+    return _ensure_cols(df)
 
-    # Ép chuỗi cho các cột có thể NaN
-    for c in ["open_time", "close_time", "closed_days", "price_level"]:
-        if c in df.columns:
-            df[c] = df[c].fillna("").astype(str)
+def main(in_csv: str | None = None, out_parquet: str | None = None):
+    ROOT = Path(__file__).resolve().parents[1]
+    in_csv = in_csv or str(ROOT / "data" / "itinerary_dataset.csv")
+    out_parquet = out_parquet or str(ROOT / "data" / "itinerary_dataset.clean.parquet")
 
-    # Chuẩn hoá số
-    for c in ["duration_min","avg_cost","rating","review_count","popularity","lat","lon"]:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+    df = load_dataset(in_csv)
 
-    # Giờ mở/đóng + ngày nghỉ
-    df["open_min"]  = df["open_time"].apply(hhmm_to_min)
-    df["close_min"] = df["close_time"].apply(hhmm_to_min)
+    # types & normalization
+    df["id"] = df["id"].apply(_safe_int)
+    df["name"] = df["name"].astype(str).fillna("").str.strip()
+    df["city"] = df["city"].astype(str).fillna("").str.strip()
+    df["category"] = df["category"].astype(str).fillna("").str.strip()
+
+    df["avg_cost"] = df["avg_cost"].apply(_safe_float)
+    df["duration_min"] = df["duration_min"].apply(_safe_float)
+    df["price_level"] = df["price_level"].astype(str).fillna("")
+
+    df["open_time"] = df["open_time"].astype(str).fillna("")
+    df["close_time"] = df["close_time"].astype(str).fillna("")
+    df["open_min"] = df["open_time"].apply(parse_hhmm)
+    df["close_min"] = df["close_time"].apply(parse_hhmm)
+
+    df["closed_days"] = df["closed_days"].apply(parse_closed_days)
     df["closed_set"] = df["closed_days"].apply(parse_closed_days)
 
-    # Price level ($, $$, $$$) → 1..3
-    df["price_level_num"] = df["price_level"].apply(price_to_level)
+    df["rating"] = df["rating"].apply(_safe_float)
+    df["review_count"] = df["review_count"].apply(_safe_int)
+    df["best_time"] = df["best_time"].astype(str).fillna("")
+    df["desc"] = df["desc"].astype(str).fillna("")
+    df["tags"] = df["tags"].astype(str).fillna("")
+    df["image_url"] = df["image_url"].astype(str).fillna("")
+    df["address"] = df["address"].astype(str).fillna("")
 
-    # Tên không dấu để tra cứu
-    df["norm_name"] = df["name"].apply(lambda s: strip_accents(s).lower())
+    df["lat"] = df["lat"].apply(_safe_float)
+    df["lon"] = df["lon"].apply(_safe_float)
 
-    # Văn bản hợp nhất cho TF-IDF + synonyms
-    base_text = (
-        df["name"].astype(str) + " " + df["city"].astype(str) + " " +
-        df["category"].astype(str) + " " + df["tags"].astype(str) + " " +
-        df["desc"].astype(str)
-    ).apply(lambda s: strip_accents(clean_text(s)).lower())
+    # helpers for search
+    df["norm_name"] = df["name"].map(lambda s: strip_accents(s).lower().strip())
+    df["text"] = (df["name"].fillna("") + " | " +
+                  df["category"].fillna("") + " | " +
+                  df["tags"].fillna("") + " | " +
+                  df["address"].fillna("") + " | " +
+                  df["desc"].fillna("")).str.strip()
 
-    df["text"] = base_text + " " + base_text.apply(expand_with_synonyms)
+    # write
+    Path(out_parquet).parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out_parquet, index=False)
+    print(f"ETL itinerary → {out_parquet} rows={len(df)}")
 
-    # Điền thiếu an toàn
-    df["duration_min"] = df["duration_min"].fillna(90).astype(int)
-    df["avg_cost"] = df["avg_cost"].fillna(0).astype(int)
-    df["rating"] = df["rating"].fillna(0.0)
-    df["lat"] = df["lat"].fillna(0.0)
-    df["lon"] = df["lon"].fillna(0.0)
-
-    return df
-
-
-# ===== CLI nhỏ để ghi parquet sạch phục vụ build_index =====
 if __name__ == "__main__":
-    import sys
-    src = sys.argv[1] if len(sys.argv) > 1 else "data/itinerary_dataset.csv"
-    df = load_dataset(src).reset_index(drop=True)
-    outp = "data/itinerary_dataset.clean.parquet"
-    df.to_parquet(outp, index=False)
-    print(f"✅ Wrote {outp} with {len(df)} rows")
+    # CLI: python -m src.etl [in_csv] [out_parquet]
+    in_csv = sys.argv[1] if len(sys.argv) >= 2 else None
+    out_pq = sys.argv[2] if len(sys.argv) >= 3 else None
+    main(in_csv, out_pq)

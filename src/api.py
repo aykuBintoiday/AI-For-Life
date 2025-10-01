@@ -3,301 +3,171 @@ from __future__ import annotations
 
 import os
 import logging
-import traceback
 from typing import Optional
 
-from fastapi import FastAPI, Query, HTTPException
+import numpy as np
+from fastapi import FastAPI, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sklearn.metrics.pairwise import cosine_similarity  # <- thêm cho /_debug/preview
+from fastapi.responses import JSONResponse
 
 from .recommender import Recommender
+from .etl import strip_accents  # dùng ở /_debug/preview
 
-# ==== logging (dev) ====
+# (tuỳ chọn) Q&A – khởi tạo mềm
+try:
+    from .qaguide import QAGuide  # noqa
+except Exception:
+    QAGuide = None  # type: ignore
+
+log = logging.getLogger("travel-ai-api")
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("travel-ai-api")
 
+# ---- Đọc token admin từ .env (đặt ADMIN_TOKEN=secret123) ----
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "").strip()
 
-def tb_string(limit: int = 2000) -> str:
-    """Chuỗi traceback rút gọn để trả về trong detail (dev only)."""
-    s = traceback.format_exc()
-    if len(s) > limit:
-        s = s[:limit] + "...(truncated)"
-    return s
+app = FastAPI(title="Travel AI API", version="1.0.0")
 
-
-app = FastAPI(title="Travel Planner (Cosine + ML + Heuristic)")
-
-# CORS mở cho demo
+# CORS cho UI tĩnh
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # để test nhanh; production nên giới hạn domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Khởi tạo recommender
+# ---------- Safe JSON ----------
+def safe_json(obj):
+    if isinstance(obj, dict):
+        return {k: safe_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [safe_json(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [safe_json(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return [safe_json(v) for v in obj.tolist()]
+    try:
+        if obj is None:
+            return None
+        if isinstance(obj, (float, np.floating)):
+            return float(obj) if np.isfinite(obj) else None
+        if isinstance(obj, (int, np.integer)):
+            return int(obj)
+        return obj
+    except Exception:
+        return None
+
+# ---------- Init models ----------
+rec: Optional[Recommender] = None
+qag = None
+
 try:
     rec = Recommender()
-except Exception as e:
-    logger.exception("Failed to init Recommender")
-    raise
+    log.info("Recommender loaded")
+except Exception:
+    log.exception("Failed to init Recommender")
+    rec = None
 
-
-class ItineraryResp(BaseModel):
-    days: int
-    per_day_budget: int
-    total_cost_estimate: int
-    itinerary: list
-
-
-@app.get("/ping")
-def ping():
-    return {"ok": True}
-
-
-@app.get("/place")
-def place(name: str = Query(..., description="Tên địa điểm (copy/paste)")):
+if QAGuide is not None and rec is not None:
     try:
-        r = rec.get_place(name)
-        if not r:
-            raise HTTPException(status_code=404, detail="Không tìm thấy địa điểm")
-        return r
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Place endpoint error")
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "msg": f"Place lookup failed: {type(e).__name__}: {e}",
-                "traceback": tb_string(),
-                "hint": "Kiểm tra name (có dấu/không dấu). Ví dụ thử 'Ba Na Hills' hoặc 'Bà Nà Hills'.",
-            },
-        )
+        # truyền encoder của recommender cho QAGuide để dùng cùng model
+        qag = QAGuide(encoder=rec.nn)
+        log.info("QAGuide loaded")
+    except Exception:
+        log.exception("Failed to init QAGuide")
+        qag = None
 
 
-@app.get("/itinerary", response_model=ItineraryResp)
+# ---------- Endpoints ----------
+@app.get("/_health")
+def health():
+    return {"ok": True, "models": {"recommender": rec is not None, "qag": qag is not None}}
+
+
+@app.get("/itinerary")
 def itinerary(
-    q: str = Query(..., description="Sở thích/mô tả chuyến đi (tự nhiên)"),
-    days: int = Query(..., ge=1, le=10),
-    budget_total: int = Query(..., ge=0),
+    q: str = Query(..., description="Miêu tả mong muốn chuyến đi"),
+    days: int = Query(2, ge=1, le=10),
+    budget_total: int = Query(3_000_000, ge=0),
     city: Optional[str] = Query(None),
 ):
-    """
-    Dev-friendly: Trước khi gọi recommender, kiểm tra các điều kiện hay lỗi thường gặp.
-    """
+    if rec is None:
+        return JSONResponse({"detail": "Recommender not available"}, status_code=503)
     try:
-        # --- Preflight checks: dữ liệu & TF-IDF có khớp không?
-        df_len = len(rec.df) if getattr(rec, "df", None) is not None else None
-        X_shape = tuple(getattr(rec, "X", None).shape) if getattr(rec, "X", None) is not None else None
-
-        if df_len is None or X_shape is None:
-            raise RuntimeError("Recommender chưa load đủ df hoặc TF-IDF (X).")
-
-        if X_shape[0] != df_len:
-            raise RuntimeError(
-                f"TF-IDF matrix rows ({X_shape[0]}) != DataFrame rows ({df_len}). "
-                f"Cần rebuild TF-IDF sau ETL."
-            )
-
-        # --- Gọi recommender
-        result = rec.itinerary(q, days, budget_total, city)
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Itinerary endpoint error")
-        # Gợi ý khắc phục theo từng loại lỗi thường gặp
-        hint = "Xem traceback, sau đó thử: python -m src.build_index (rebuild TF-IDF), rồi chạy lại server."
-        if "TF-IDF" in str(e) or "matrix" in str(e) or "shape" in str(e) or "index" in str(e).lower():
-            hint = (
-                "Khả năng lệch index giữa DataFrame và TF-IDF. "
-                "Hãy đảm bảo trong build_index có reset_index(drop=True), "
-                "recommender cũng reset_index(drop=True), và trong cosine dùng cos_all[df.index]. "
-                "Sau đó chạy: python -m src.build_index"
-            )
-        elif "city" in str(e).lower():
-            hint = "Thử bỏ dấu ở city (vd: 'Da Nang') hoặc bỏ hẳn tham số city để test."
-        elif "models" in str(e).lower() or "joblib" in str(e).lower():
-            hint = "Thiếu models? Kiểm tra thư mục models/ có tfidf_vectorizer.joblib, tfidf_matrix.npz, ml_classifier.joblib chưa."
-
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "msg": f"Build itinerary failed: {type(e).__name__}: {e}",
-                "traceback": tb_string(),
-                "hint": hint,
-                "echo": {
-                    "q": q,
-                    "days": days,
-                    "budget_total": budget_total,
-                    "city": city,
-                },
-            },
-        )
-
-
-# =========================
-#        DEBUG ENDPOINTS
-# =========================
-
-@app.get("/_debug/state")
-def debug_state():
-    """
-    Trả về trạng thái hiện tại của dữ liệu & TF-IDF để chẩn đoán nhanh.
-    Không nên bật endpoint này ở production.
-    """
-    try:
-        df = getattr(rec, "df", None)
-        X = getattr(rec, "X", None)
-        vec = getattr(rec, "vec", None)
-
-        info = {
-            "df_rows": len(df) if df is not None else None,
-            "df_cols": list(df.columns)[:20] if df is not None else None,
-            "has_norm_name": bool("norm_name" in df.columns) if df is not None else None,
-            "has_text": bool("text" in df.columns) if df is not None else None,
-            "X_shape": tuple(X.shape) if X is not None else None,
-            "vocabulary_size": len(getattr(vec, "vocabulary_", {})) if vec is not None else None,
-            "index_match": (tuple(X.shape)[0] == len(df)) if (X is not None and df is not None) else None,
-            "city_samples": df["city"].value_counts().to_dict() if df is not None and "city" in df.columns else None,
-            "category_samples": df["category"].value_counts().to_dict() if df is not None and "category" in df.columns else None,
-        }
-        # Gợi ý tự động
-        hints = []
-        if info["df_rows"] is None or info["X_shape"] is None:
-            hints.append("rec.df hoặc rec.X chưa sẵn sàng. Kiểm tra khởi tạo Recommender.")
-        elif info["index_match"] is False:
-            hints.append("TF-IDF rows != DF rows. Rebuild TF-IDF: python -m src.build_index")
-        if not info["has_text"]:
-            hints.append("Thiếu cột 'text' sau ETL. Chạy lại: python -m src.etl data/itinerary_dataset.csv")
-
-        info["hints"] = hints
-        return info
-    except Exception as e:
-        logger.exception("/_debug/state failed")
-        raise HTTPException(
-            status_code=500,
-            detail={"msg": f"debug_state failed: {type(e).__name__}: {e}", "traceback": tb_string()},
-        )
-
-
-@app.get("/_debug/files")
-def debug_files():
-    """
-    Kiểm tra sự tồn tại các file model và kích thước.
-    """
-    try:
-        paths = [
-            "models/tfidf_vectorizer.joblib",
-            "models/tfidf_matrix.npz",
-            "models/ml_classifier.joblib",
-            "data/itinerary_dataset.csv",
-            "data/itinerary_dataset.clean.parquet",
-        ]
-        files = []
-        for p in paths:
-            files.append({
-                "path": p,
-                "exists": os.path.exists(p),
-                "size_bytes": os.path.getsize(p) if os.path.exists(p) else None
-            })
-        return {"files": files}
-    except Exception as e:
-        logger.exception("/_debug/files failed")
-        raise HTTPException(
-            status_code=500,
-            detail={"msg": f"debug_files failed: {type(e).__name__}: {e}", "traceback": tb_string()},
-        )
-
-
-@app.get("/debug/status")
-def debug_status():
-    try:
-        n, v = rec.X.shape
+        data = rec.itinerary(q, days, budget_total, city)
+        return JSONResponse(safe_json(data))
     except Exception:
-        n, v = None, None
-    return {
-        "rows": len(rec.df),
-        "tfidf": {"n_items": n, "n_terms": v},
-        "cities": sorted(list(rec.df["city"].unique())),
-        "cats": rec.df["category"].value_counts().to_dict(),
-    }
+        log.exception("Itinerary endpoint error")
+        return JSONResponse({"detail": "Internal error while building itinerary"}, status_code=500)
 
 
 @app.get("/_debug/preview")
-def debug_preview(q: str = Query(..., description="Câu hỏi gốc của người dùng")):
+def debug_preview(q: str, city: Optional[str] = None):
     """
-    Cho biết query sau khi normalize + top 10 item theo cosine để soi nhanh vì sao 'không hiểu chữ'.
+    Trả nhanh top-10 theo nn_cos để kiểm tra liên quan (debug).
     """
+    if rec is None:
+        return JSONResponse({"detail": "Recommender not available"}, status_code=503)
     try:
-        q_norm = rec.normalize_for_debug(q)
-        import numpy as np
-        q_vec = rec.vec.transform([q_norm])
-        cos = cosine_similarity(q_vec, rec.X).ravel()
-        topk_idx = np.argsort(-cos)[:10].tolist()
-        top = rec.df.iloc[topk_idx][["id", "name", "city", "category"]].copy()
-        top["cos"] = [float(cos[i]) for i in topk_idx]
-        return {"q_norm": q_norm, "top": top.to_dict(orient="records")}
-    except Exception as e:
-        logger.exception("/_debug/preview failed")
-        raise HTTPException(
-            status_code=500,
-            detail={"msg": f"debug_preview failed: {type(e).__name__}: {e}", "traceback": tb_string()},
-        )
-
-# --- THÊM VÀO CUỐI FILE api.py ---
-from fastapi import Body
-
-@app.post("/_debug/preview")
-def debug_preview(payload: dict = Body(...)):
-    """
-    Preview khớp TF-IDF cho truy vấn q (và city tuỳ chọn).
-    Trả về q_norm, q_vec.nnz và top 10 item với các điểm số.
-    """
-    try:
-        q = str(payload.get("q", "") or "")
-        city = payload.get("city")
-        # Lọc city như trong recommender
+        _, q_emb = rec._encode_query(q)
+        nn = rec._bi_scores(q_emb)
         df = rec.df.copy()
         if city:
-            key = rec.__class__.__mro__[0].__dict__.get("_city_filter", None)
-        # dùng method của rec nếu có
-        try:
-            df = rec._city_filter(df, city) if city else df
-        except Exception:
-            pass
+            key = df["city"].astype(str).str.lower().apply(strip_accents).str.contains(
+                strip_accents(city).lower(), na=False
+            )
+            sub = df[key]
+            if not sub.empty:
+                df = sub
+        df = df.assign(nn_cos=nn[df.index])
+        top = df.sort_values("nn_cos", ascending=False).head(10)
+        out = top[["id", "name", "city", "category", "nn_cos"]].to_dict(orient="records")
+        return JSONResponse(safe_json({"q": q, "top10": out}))
+    except Exception:
+        log.exception("Preview error")
+        return JSONResponse({"detail": "Preview failed"}, status_code=500)
 
-        # chuẩn hoá + vector hoá
-        q_norm = rec.normalize_for_debug(q) if hasattr(rec, "normalize_for_debug") else q
-        q_vec = rec.vec.transform([q_norm])
-        cos_all = cosine_similarity(q_vec, rec.X).ravel()
-        df = df.assign(cos=cos_all[df.index])
 
-        # backoff kw_boost như trong recommender
-        try:
-            kw_boost = rec._kw_boost(df, q_norm)
-            df["kw_boost"] = kw_boost
-        except Exception:
-            df["kw_boost"] = 0.0
+@app.get("/ask")
+def ask(
+    q: str = Query(..., description="Câu hỏi về địa danh (ví dụ: 'Asia Park mở cửa mấy giờ?')"),
+    city: Optional[str] = Query(None, description="Tùy chọn, để bias theo thành phố"),
+):
+    """
+    Q&A hướng dẫn viên (nếu QAGuide init thành công).
+    Ghi chú: QAGuide.answer chỉ nhận q; city (nếu có) sẽ được nối vào q cho mục đích bias nhẹ.
+    """
+    if qag is None:
+        return JSONResponse({"detail": "QAGuide not available"}, status_code=503)
+    try:
+        q_in = f"{q} {city}" if city else q
+        ans = qag.answer(q_in)  # FIX: không truyền city như tham số thứ 2 nữa
+        return JSONResponse(safe_json(ans))
+    except Exception:
+        log.exception("Ask endpoint error")
+        return JSONResponse({"detail": "Internal error while answering"}, status_code=500)
 
-        def base_row(x):
-            return 0.70 * x["cos"] + 0.20 * (x.get("rating", 0) / 5) + 0.10 * (x.get("popularity", 0)) + 0.05 * x.get("kw_boost", 0)
 
-        df["base"] = df.apply(base_row, axis=1)
-        out = df.sort_values("base", ascending=False).head(10)[
-            ["id","name","city","category","cos","kw_boost","rating","popularity","tags"]
-        ].to_dict(orient="records")
+# ---------- (Tuỳ chọn) Admin: reload models sau khi cron xong ----------
+@app.post("/_admin/reload")
+def admin_reload(x_admin_token: str = Header(default="")):
+    """
+    Gọi để reload Recommender/QAGuide mà không cần restart server.
+    Yêu cầu header: X-Admin-Token = ADMIN_TOKEN trong .env
+    """
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
-        return {
-            "q": q,
-            "q_norm": q_norm,
-            "q_vec_nnz": int(q_vec.nnz),
-            "top10": out
-        }
-    except Exception as e:
-        logger.exception("/_debug/preview failed")
-        return {"error": f"{type(e).__name__}: {e}"}
+    global rec, qag
+    try:
+        rec = Recommender()  # re-init đọc models *.npy mới
+        if QAGuide is not None:
+            try:
+                qag = QAGuide(encoder=rec.nn)
+            except Exception:
+                log.exception("QAGuide reload failed; keep None")
+                qag = None
+        return {"ok": True, "recommender": rec is not None, "qag": qag is not None}
+    except Exception:
+        log.exception("Reload failed")
+        return JSONResponse({"detail": "Reload failed"}, status_code=500)
