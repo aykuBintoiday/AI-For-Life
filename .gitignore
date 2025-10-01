@@ -1,33 +1,3 @@
-# Python
 .venv/
 venv/
 env/
-__pycache__/
-*.py[cod]
-*.pyo
-
-# Build / dist
-build/
-dist/
-*.egg-info/
-
-# Tools / IDE
-.vscode/
-.idea/
-.pytest_cache/
-.mypy_cache/
-.ipynb_checkpoints/
-
-# Secrets & env
-.env
-*.env
-
-# Logs
-logs/
-*.log
-
-# (Tuỳ chọn) nặng không cần track
-models/
-checkpoints/
-data/raw/
-data/interim/

@@ -1,0 +1,176 @@
+
+[2025-09-29 20:37:49] [RUN] etl_itinerary …
+CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl D:\FEandBE\travel-ai\data\itinerary_dataset.csv
+--- STDOUT ---
+ETL itinerary → D:\FEandBE\travel-ai\data\itinerary_dataset.clean.parquet rows=176
+
+--- STDERR ---
+
+[RET] etl_itinerary = 0
+
+[2025-09-29 20:37:49] [RUN] build_tfidf …
+CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.build_index
+--- STDOUT ---
+✅ Built TF-IDF: 176 items, 3002 terms
+💾 Saved: models/tfidf_vectorizer.joblib & models/tfidf_matrix.npz
+
+--- STDERR ---
+
+[RET] build_tfidf = 0
+
+[2025-09-29 20:37:51] [RUN] build_nn …
+CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_nn.py
+--- STDOUT ---
+🧠 Loading model: intfloat/multilingual-e5-base
+📄 Items: 176
+✅ Saved embeddings: models/nn_embeds.npy shape=(176, 768)
+✅ Saved meta: models/nn_meta.json
+
+--- STDERR ---
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:02<00:00,  2.33s/it]Batches: 100%|██████████| 1/1 [00:02<00:00,  2.33s/it]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:02<00:00,  2.14s/it]Batches: 100%|██████████| 1/1 [00:02<00:00,  2.14s/it]
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.55s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.55s/it]
+
+[RET] build_nn = 0
+
+[2025-09-29 20:38:09] [RUN] etl_qna …
+CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl_qna D:\FEandBE\travel-ai\data\qna_places.csv
+--- STDOUT ---
+ETL QnA → D:\FEandBE\travel-ai\data\qna_places.clean.parquet rows=5
+
+--- STDERR ---
+
+[RET] etl_qna = 0
+
+[2025-09-29 20:38:09] [RUN] build_qna_nn …
+CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_qna_nn.py
+--- STDOUT ---
+[qna_nn] rows=5
+[qna_nn] model=intfloat/multilingual-e5-base
+[qna_nn] saved qna_embeds.npy (5x768) and qna_meta.json
+
+--- STDERR ---
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.53s/it]Batches: 100%|██████████| 1/1 [00:01<00:00,  1.53s/it]
+
+[RET] build_qna_nn = 0
+[2025-09-29 21:41:59] [RUN] etl_itinerary …
+[2025-09-29 21:41:59] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl D:\FEandBE\travel-ai\data\itinerary_dataset.csv
+[2025-09-29 21:42:00] --- STDERR ---
+[2025-09-29 21:42:00] Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\FEandBE\travel-ai\src\etl.py", line 178, in <module>
+    main(in_csv, out_pq)
+  File "D:\FEandBE\travel-ai\src\etl.py", line 172, in main
+    print(f"ETL itinerary \u2192 {out_parquet} rows={len(df)}")
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 14: character maps to <undefined>
+[2025-09-29 21:42:00] [RET] etl_itinerary = 1
+[2025-09-29 21:42:00] [RUN] build_tfidf …
+[2025-09-29 21:42:00] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.build_index
+[2025-09-29 21:42:01] --- STDERR ---
+[2025-09-29 21:42:01] Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\FEandBE\travel-ai\src\build_index.py", line 38, in <module>
+    main()
+  File "D:\FEandBE\travel-ai\src\build_index.py", line 33, in main
+    print(f"\u2705 Built TF-IDF: {X.shape[0]} items, {X.shape[1]} terms")
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 0: character maps to <undefined>
+[2025-09-29 21:42:01] [RET] build_tfidf = 1
+[2025-09-29 21:42:01] [RUN] build_nn …
+[2025-09-29 21:42:01] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_nn.py
+[2025-09-29 21:42:07] --- STDERR ---
+[2025-09-29 21:42:07] Traceback (most recent call last):
+  File "D:\FEandBE\travel-ai\build_nn.py", line 76, in <module>
+    main()
+  File "D:\FEandBE\travel-ai\build_nn.py", line 37, in main
+    print(f"\U0001f9e0 Loading model: {MODEL_NAME}")
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f9e0' in position 0: character maps to <undefined>
+[2025-09-29 21:42:07] [RET] build_nn = 1
+[2025-09-29 21:42:07] [RUN] etl_qna …
+[2025-09-29 21:42:07] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl_qna D:\FEandBE\travel-ai\data\qna_places.csv
+[2025-09-29 21:42:08] --- STDERR ---
+[2025-09-29 21:42:08] Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\FEandBE\travel-ai\src\etl_qna.py", line 84, in <module>
+    main(in_csv, out_pq)
+  File "D:\FEandBE\travel-ai\src\etl_qna.py", line 78, in main
+    print(f"ETL QnA \u2192 {out_parquet} rows={len(df)}")
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.11_3.11.2544.0_x64__qbz5n2kfra8p0\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2192' in position 8: character maps to <undefined>
+[2025-09-29 21:42:08] [RET] etl_qna = 1
+[2025-09-29 21:42:08] [RUN] build_qna_nn …
+[2025-09-29 21:42:08] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_qna_nn.py
+[2025-09-29 21:42:20] --- STDOUT ---
+[2025-09-29 21:42:20] [qna_nn] rows=5
+[qna_nn] model=intfloat/multilingual-e5-base
+[qna_nn] saved qna_embeds.npy (5x768) and qna_meta.json
+[2025-09-29 21:42:20] --- STDERR ---
+[2025-09-29 21:42:20] 
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]
+Batches: 100%|##########| 1/1 [00:01<00:00,  1.15s/it]
+Batches: 100%|##########| 1/1 [00:01<00:00,  1.15s/it]
+[2025-09-29 21:42:20] [RET] build_qna_nn = 0
+[2025-09-29 21:42:20] Pipeline FAILED — xem chi tiết: D:\FEandBE\travel-ai\update.log
+[2025-09-29 21:47:35] [RUN] etl_itinerary …
+[2025-09-29 21:47:35] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl D:\FEandBE\travel-ai\data\itinerary_dataset.csv
+[2025-09-29 21:47:35] --- STDOUT ---
+[2025-09-29 21:47:35] ETL itinerary → D:\FEandBE\travel-ai\data\itinerary_dataset.clean.parquet rows=176
+[2025-09-29 21:47:35] [RET] etl_itinerary = 0
+[2025-09-29 21:47:35] [RUN] build_tfidf …
+[2025-09-29 21:47:35] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.build_index
+[2025-09-29 21:47:37] --- STDOUT ---
+[2025-09-29 21:47:37] ✅ Built TF-IDF: 176 items, 3002 terms
+💾 Saved: models/tfidf_vectorizer.joblib & models/tfidf_matrix.npz
+[2025-09-29 21:47:37] [RET] build_tfidf = 0
+[2025-09-29 21:47:37] [RUN] build_nn …
+[2025-09-29 21:47:37] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_nn.py
+[2025-09-29 21:47:54] --- STDOUT ---
+[2025-09-29 21:47:54] 🧠 Loading model: intfloat/multilingual-e5-base
+📄 Items: 176
+✅ Saved embeddings: models/nn_embeds.npy shape=(176, 768)
+✅ Saved meta: models/nn_meta.json
+[2025-09-29 21:47:54] --- STDERR ---
+[2025-09-29 21:47:54] 
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]
+Batches: 100%|██████████| 1/1 [00:02<00:00,  2.48s/it]
+Batches: 100%|██████████| 1/1 [00:02<00:00,  2.48s/it]
+
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]
+Batches: 100%|██████████| 1/1 [00:02<00:00,  2.11s/it]
+Batches: 100%|██████████| 1/1 [00:02<00:00,  2.11s/it]
+
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.42s/it]
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.42s/it]
+[2025-09-29 21:47:54] [RET] build_nn = 0
+[2025-09-29 21:47:54] [RUN] etl_qna …
+[2025-09-29 21:47:54] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe -m src.etl_qna D:\FEandBE\travel-ai\data\qna_places.csv
+[2025-09-29 21:47:54] --- STDOUT ---
+[2025-09-29 21:47:54] ETL QnA → D:\FEandBE\travel-ai\data\qna_places.clean.parquet rows=5
+[2025-09-29 21:47:54] [RET] etl_qna = 0
+[2025-09-29 21:47:54] [RUN] build_qna_nn …
+[2025-09-29 21:47:54] CMD: D:\FEandBE\travel-ai\.venv\Scripts\python.exe D:\FEandBE\travel-ai\build_qna_nn.py
+[2025-09-29 21:48:07] --- STDOUT ---
+[2025-09-29 21:48:07] [qna_nn] rows=5
+[qna_nn] model=intfloat/multilingual-e5-base
+[qna_nn] saved qna_embeds.npy (5x768) and qna_meta.json
+[2025-09-29 21:48:07] --- STDERR ---
+[2025-09-29 21:48:07] 
+Batches:   0%|          | 0/1 [00:00<?, ?it/s]
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]
+Batches: 100%|██████████| 1/1 [00:01<00:00,  1.12s/it]
+[2025-09-29 21:48:07] [RET] build_qna_nn = 0
+[2025-09-29 21:48:07] Pipeline OK
